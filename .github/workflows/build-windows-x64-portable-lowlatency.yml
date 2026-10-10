@@ -9,7 +9,7 @@ on:
 jobs:
   build-win_x64:
     name: Build chiaki-ng win_x64 portable (VC)
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       CC: clang-cl.exe
       CXX: clang-cl.exe
@@ -133,6 +133,14 @@ jobs:
           vcpkgGitCommitId: ${{ env.vcpkg_baseline }}
           runVcpkgInstall: true
           vcpkgJsonGlob: "vcpkg.json"
+
+      - name: Show vcpkg failure logs
+        if: failure()
+        run: |
+          Get-ChildItem -Path vcpkg\buildtrees -Recurse -Include "config-*-out.log","build-*-out.log","*-err.log" -ErrorAction SilentlyContinue | ForEach-Object {
+            "=== $($_.FullName)"
+            Select-String -Path $_.FullName -Pattern "error|Error|ERROR|Compatibility|not able|No CMAKE" | Select-Object -First 15 | ForEach-Object { $_.Line }
+          }
 
       - name: Build libplacebo
         run: |
