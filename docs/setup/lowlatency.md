@@ -58,3 +58,17 @@ Setup-side (no code change):
 * **Window size = stream size** (or integer ratio): no scaling pass at all. Check the log for "Transferring hardware-decoded frames to software" - if it appears, zero-copy/hardware decoding is not in use and latency will be much worse.
 * **Network**: wired gigabit to the same switch as the PS5; disable *Interrupt Moderation* and *Energy Efficient Ethernet* in the NIC driver properties; no VPN/packet-inspection software.
 * **PS5**: use performance mode (60 fps) in games, set the console video output to 1080p, avoid HDMI-capture-heavy features (Share/background recording); game-side latency is part of the total.
+
+## Fourth round: code-level audit and measuring where the time goes
+Audit of the video path after the pacing fix: there is no other blocking wait or sleep in it. What remains client-side is (a) waiting for all packets of a frame, (b) handing the frame to the decoder, (c) three thread hand-offs (decoder -> frame thread -> GUI thread -> render thread, each ~0.05-0.3 ms when idle) and (d) GPU render time (<1 ms for 1080p -> 1080p with the Default preset, see above). Rewriting the thread model would save well under 1 ms and risks races in a 7000 line file that cannot be tested here, so it was deliberately not done.
+
+New diagnostic: the log now contains a line every 5 s:
+
+`Video pipeline timing over N frames: frame assembly (first to last packet) avg X ms max Y ms, decoder submit avg A ms max B ms`
+
+* **frame assembly** is how long the console takes to deliver one whole frame. If this is several ms, the client could in theory decode earlier (start decoding before the frame is complete); that would be the one worthwhile big rewrite, and this number tells whether it is. If it is below ~2 ms there is nothing to gain.
+* **decoder submit** is the time to hand the frame to the hardware decoder.
+
+Run with `CHIAKI_VERBOSE_LOG_NOISE=1` for the detailed `[latency]` render/present lines.
+
+Other research findings (not implemented): `VK_EXT_present_mode_fifo_latest_ready` is a newer tear-free present mode that shows the newest ready frame at vblank (like MAILBOX); an unverified Khronos forum post reports that on Windows `VK_PRESENT_MODE_IMMEDIATE_KHR` can take the "Independent Flip Immediate" path (no DWM composition) in a full-screen borderless window.

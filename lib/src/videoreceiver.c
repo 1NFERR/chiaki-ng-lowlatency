@@ -65,6 +65,11 @@ CHIAKI_EXPORT void chiaki_video_receiver_init(ChiakiVideoReceiver *video_receive
 	video_receiver->idr_request_retries = 0;
 	video_receiver->frame_flush_valid = false;
 	video_receiver->frame_flush_result = CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_FAILED;
+	video_receiver->timing_frame_first_packet_us = 0;
+	video_receiver->timing_log_us = 0;
+	video_receiver->timing_frames = 0;
+	video_receiver->timing_assembly_sum_us = video_receiver->timing_assembly_max_us = 0;
+	video_receiver->timing_decode_sum_us = video_receiver->timing_decode_max_us = 0;
 	chiaki_mutex_init(&video_receiver->frames_lost_mutex, false);
 }
 
@@ -121,6 +126,31 @@ static void chiaki_video_receiver_report_packet_stats(ChiakiVideoReceiver *video
 		received = expected - lost;
 	}
 	chiaki_packet_stats_push_generation(video_receiver->packet_stats, received, lost);
+}
+
+#define TIMING_LOG_INTERVAL_US 5000000
+
+/**
+ * Every few seconds log how long the console takes to deliver a whole frame (first to last packet,
+ * i.e. what the client has to wait before it can start decoding) and how long handing the frame to the
+ * decoder takes. Together with the "[latency]" render logs this shows where the client-side time goes.
+ */
+static void chiaki_video_receiver_timing_tick(ChiakiVideoReceiver *video_receiver)
+{
+	uint64_t now = chiaki_time_now_monotonic_us();
+	if(!video_receiver->timing_log_us)
+		video_receiver->timing_log_us = now;
+	if(now - video_receiver->timing_log_us < TIMING_LOG_INTERVAL_US || !video_receiver->timing_frames)
+		return;
+	double n = (double)video_receiver->timing_frames;
+	CHIAKI_LOGI(video_receiver->log, "Video pipeline timing over %u frames: frame assembly (first to last packet) avg %.2f ms max %.2f ms, decoder submit avg %.2f ms max %.2f ms",
+			video_receiver->timing_frames,
+			video_receiver->timing_assembly_sum_us / n / 1000.0, video_receiver->timing_assembly_max_us / 1000.0,
+			video_receiver->timing_decode_sum_us / n / 1000.0, video_receiver->timing_decode_max_us / 1000.0);
+	video_receiver->timing_log_us = now;
+	video_receiver->timing_frames = 0;
+	video_receiver->timing_assembly_sum_us = video_receiver->timing_assembly_max_us = 0;
+	video_receiver->timing_decode_sum_us = video_receiver->timing_decode_max_us = 0;
 }
 
 static void chiaki_video_receiver_idr_watchdog(ChiakiVideoReceiver *video_receiver)
@@ -249,6 +279,7 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 
 		video_receiver->frame_index_cur = frame_index;
 		video_receiver->frame_flush_valid = false;
+		video_receiver->timing_frame_first_packet_us = chiaki_time_now_monotonic_us();
 		err = chiaki_frame_processor_alloc_frame(&video_receiver->frame_processor, packet);
 		if(err != CHIAKI_ERR_SUCCESS)
 			CHIAKI_LOGW(video_receiver->log, "Video receiver could not allocate frame for packet.");
@@ -377,7 +408,22 @@ static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *vi
 
 	if(succ && video_receiver->session->video_sample_cb)
 	{
+		uint64_t cb_begin_us = chiaki_time_now_monotonic_us();
 		bool cb_succ = video_receiver->session->video_sample_cb(frame, frame_size, video_receiver->frames_lost, recovered, video_receiver->session->video_sample_cb_user);
+		uint64_t cb_end_us = chiaki_time_now_monotonic_us();
+		if(video_receiver->timing_frame_first_packet_us && cb_begin_us >= video_receiver->timing_frame_first_packet_us)
+		{
+			uint64_t assembly_us = cb_begin_us - video_receiver->timing_frame_first_packet_us;
+			uint64_t decode_us = cb_end_us - cb_begin_us;
+			video_receiver->timing_frames++;
+			video_receiver->timing_assembly_sum_us += assembly_us;
+			if(assembly_us > video_receiver->timing_assembly_max_us)
+				video_receiver->timing_assembly_max_us = assembly_us;
+			video_receiver->timing_decode_sum_us += decode_us;
+			if(decode_us > video_receiver->timing_decode_max_us)
+				video_receiver->timing_decode_max_us = decode_us;
+			chiaki_video_receiver_timing_tick(video_receiver);
+		}
 		chiaki_mutex_lock(&video_receiver->frames_lost_mutex);
 		video_receiver->frames_lost = 0;
 		chiaki_mutex_unlock(&video_receiver->frames_lost_mutex);
