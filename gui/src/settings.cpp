@@ -599,7 +599,7 @@ static const QMap<ChiakiCodec, QString> codecs = {
 	{ CHIAKI_CODEC_H265_HDR, "h265_hdr" }
 };
 
-static const ChiakiCodec codec_default_ps5 = CHIAKI_CODEC_H265_HDR;
+static const ChiakiCodec codec_default_ps5 = CHIAKI_CODEC_H265;
 static const ChiakiCodec codec_default_ps4 = CHIAKI_CODEC_H264;
 
 static ChiakiCodec clampCodecForBackend(RenderBackend backend, ChiakiCodec codec)

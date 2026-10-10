@@ -8,7 +8,7 @@ Target: PS5 on wired LAN, DualSense plugged into the PS5 (so only video/audio la
 | Audio | Default buffer 9600 -> 1920 bytes (10 ms), jitter prefill 3 -> 2 frames | ~150-200 ms -> ~40-50 ms audio delay |
 | Decoder | `AV_CODEC_FLAG_LOW_DELAY`; slice threading for software decode | no reorder/lookahead delay, no frame-thread delay |
 | Windows | 1 ms timer resolution, HIGH priority class, EcoQoS off, MMCSS "Games" + highest priority on network threads | removes 15.6 ms scheduler quantization and OS throttling |
-| Defaults | PS5 local codec = HEVC HDR; 1080p auto bitrate = 30 Mbit/s | better picture, bandwidth is free on LAN |
+| Defaults | PS5 local codec = HEVC (SDR; pick HEVC HDR in Settings for an HDR display); local auto bitrate = 100 Mbit/s | better picture, bandwidth is free on LAN |
 
 Already present upstream and kept: immediate present mode (vsync off), swapchain depth 1, frame queue depth 2, no frame mixer, zero-copy hardware decode, frame flushed to the decoder as soon as enough FEC units arrived.
 
