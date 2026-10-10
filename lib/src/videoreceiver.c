@@ -63,6 +63,8 @@ CHIAKI_EXPORT void chiaki_video_receiver_init(ChiakiVideoReceiver *video_receive
 	video_receiver->waiting_for_idr = false;
 	video_receiver->idr_request_time_us = 0;
 	video_receiver->idr_request_retries = 0;
+	video_receiver->frame_flush_valid = false;
+	video_receiver->frame_flush_result = CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_FAILED;
 	chiaki_mutex_init(&video_receiver->frames_lost_mutex, false);
 }
 
@@ -87,6 +89,38 @@ CHIAKI_EXPORT void chiaki_video_receiver_set_waiting_for_idr(ChiakiVideoReceiver
 	}
 	video_receiver->waiting_for_idr = waiting_for_idr;
 	chiaki_mutex_unlock(&video_receiver->waiting_for_idr_mutex);
+}
+
+/**
+ * Report the packet loss of the finished frame to the congestion control.
+ *
+ * The console lowers its bitrate (and never raises it again) as soon as loss is reported, so
+ * only loss that was NOT repaired by FEC is reported in full: a frame that was complete or
+ * fully recovered is reported with no loss (a quarter of the repaired units for recovered frames
+ * so that a permanently struggling link is still noticed).
+ */
+static void chiaki_video_receiver_report_packet_stats(ChiakiVideoReceiver *video_receiver)
+{
+	ChiakiFrameProcessor *fp = &video_receiver->frame_processor;
+	uint64_t received = fp->units_source_received + fp->units_fec_received;
+	uint64_t expected = fp->units_source_expected + fp->units_fec_expected;
+	uint64_t lost = expected > received ? expected - received : 0;
+	if(video_receiver->frame_flush_valid)
+	{
+		switch(video_receiver->frame_flush_result)
+		{
+			case CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_SUCCESS:
+				lost = 0;
+				break;
+			case CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_FEC_SUCCESS:
+				lost /= 4;
+				break;
+			default:
+				break;
+		}
+		received = expected - lost;
+	}
+	chiaki_packet_stats_push_generation(video_receiver->packet_stats, received, lost);
 }
 
 static void chiaki_video_receiver_idr_watchdog(ChiakiVideoReceiver *video_receiver)
@@ -190,14 +224,15 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 	if(video_receiver->frame_index_cur < 0 ||
 		chiaki_seq_num_16_gt(frame_index, (ChiakiSeqNum16)video_receiver->frame_index_cur))
 	{
-		if(video_receiver->packet_stats)
-			chiaki_frame_processor_report_packet_stats(&video_receiver->frame_processor, video_receiver->packet_stats);
-
 		chiaki_video_receiver_idr_watchdog(video_receiver);
 
 		// last frame not flushed yet?
 		if(video_receiver->frame_index_cur >= 0 && video_receiver->frame_index_prev != video_receiver->frame_index_cur)
 			err = chiaki_video_receiver_flush_frame(video_receiver);
+
+		// report after the flush so that loss repaired by FEC is not counted as loss
+		if(video_receiver->packet_stats)
+			chiaki_video_receiver_report_packet_stats(video_receiver);
 
 		if(err != CHIAKI_ERR_SUCCESS)
 			CHIAKI_LOGW(video_receiver->log, "Video receiver could not flush frame.");
@@ -213,6 +248,7 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 		}
 
 		video_receiver->frame_index_cur = frame_index;
+		video_receiver->frame_flush_valid = false;
 		err = chiaki_frame_processor_alloc_frame(&video_receiver->frame_processor, packet);
 		if(err != CHIAKI_ERR_SUCCESS)
 			CHIAKI_LOGW(video_receiver->log, "Video receiver could not allocate frame for packet.");
@@ -238,6 +274,8 @@ static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *vi
 	uint8_t *frame;
 	size_t frame_size;
 	ChiakiFrameProcessorFlushResult flush_result = chiaki_frame_processor_flush(&video_receiver->frame_processor, &frame, &frame_size);
+	video_receiver->frame_flush_valid = true;
+	video_receiver->frame_flush_result = flush_result;
 
 	if(flush_result == CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_FAILED
 		|| flush_result == CHIAKI_FRAME_PROCESSOR_FLUSH_RESULT_FEC_FAILED)

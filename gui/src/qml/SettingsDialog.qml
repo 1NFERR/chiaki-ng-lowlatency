@@ -1811,6 +1811,21 @@ DialogView {
 
                         Label {
                             Layout.alignment: Qt.AlignRight
+                            text: qsTr("Low-latency Presentation (no frame pacing)")
+                        }
+
+                        C.CheckBox {
+                            checked: Chiaki.settings.lowLatencyPresent
+                            onToggled: Chiaki.settings.lowLatencyPresent = !Chiaki.settings.lowLatencyPresent
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
+                            text: qsTr("(Checked)")
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
                             text: qsTr("Constant Bitrate (CBR-like, never lower bitrate)")
                         }
 
@@ -1821,7 +1836,7 @@ DialogView {
 
                         Label {
                             Layout.alignment: Qt.AlignRight
-                            text: qsTr("(Unchecked = adaptive/VBR)")
+                            text: qsTr("(Checked; unchecked = adaptive/VBR)")
                         }
 
                         Label {

@@ -281,6 +281,7 @@ private:
     struct pl_frame_mix frame_mix;
     // Direct rendering retains the displayed mapping and replaces only pending input.
     bool bypass_frame_queue = true;
+    bool low_latency_present = true; // skip the pacing wait before submitting a frame (only with bypass_frame_queue)
     QMutex direct_frame_mutex;
     AVFrame *direct_pending_frame = nullptr;
     struct pl_frame direct_frame = {};

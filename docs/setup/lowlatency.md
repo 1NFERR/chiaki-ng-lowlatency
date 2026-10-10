@@ -31,3 +31,19 @@ Already present upstream and kept: immediate present mode (vsync off), swapchain
 
 ## IDR request on FEC failure
 Enabled by default. When a video frame cannot be recovered by FEC the client asks the console for a fresh IDR frame and drops P-frames until it arrives. The request is now resent every 200 ms if no IDR shows up (lost request or lost IDR), and after 5 retries decoding resumes without it, so the picture can no longer freeze waiting for an IDR that never comes. An existing saved setting (unchecked) is kept; tick it once in Settings.
+
+
+## Second research round (what the code and the web showed)
+### Input lag: the frame pacing wait (biggest finding)
+Before every `pl_swapchain_submit_frame` the render thread slept (`throttleFramePresentation`) until the next slot of a pacing grid locked to the stream frame interval. With direct frame mapping the frame has already been picked at that point, so the sleep delays a frame that is already getting stale by up to one frame interval (~16.7 ms at 60 fps, ~8 ms on average). This is the mechanism behind the ~50 ms regression reported upstream in [chiaki-ng#807](https://github.com/streetpea/chiaki-ng/issues/807). New setting **Low-latency Presentation (no frame pacing)**, on by default, submits the frame immediately (only with Direct Frame Mapping). Cost: frame spacing follows network arrival, so a little judder is possible; with vsync off and a wired LAN this is the lowest-latency configuration.
+
+### CBR
+The console has no client-selectable rate-control mode. What it does have (see the vitaki-vitarps5 investigation [#206](https://github.com/mauricio-gg/vitaki-vitarps5/issues/206)) is a **downward-only bitrate ratchet driven by the loss the client reports** (target bitrate steps down within a session, e.g. 5 Mbit -> 1.6 Mbit, and does not recover). Two things were wrong in the client: loss was counted before FEC, so units repaired by FEC were reported as loss, and nothing could stop the ratchet. Now:
+* Loss is reported after FEC: complete frames report 0, FEC-repaired frames a quarter of the repaired units, unrecoverable frames in full.
+* **Constant Bitrate** (default on): reports no loss at all, so the console keeps the requested bitrate (100 Mbit/s). Turn it off on Wi-Fi.
+* The console's current `target_bitrate` is logged every 10 s (`StreamConnection console target bitrate`), so you can check that it stays at the requested value. A third-party experiment ([atameric/ps5-portal-high-bitrate](https://github.com/atameric/ps5-portal-high-bitrate)) saw the PS5 honour ~97 Mbit/s for a 100 Mbit/s request.
+
+### Not done (and why)
+* Takion v20 (claimed audio loss protection, unverified, licence unclear) - see [vitaki#410](https://github.com/mauricio-gg/vitaki-vitarps5/issues/410).
+* Moving the decoder->render hand-off off the Qt GUI thread: saves well under 1 ms unless the GUI thread is busy, and is a large untestable refactor of `qmlmainwindow.cpp`.
+* DSCP/socket tuning/recvmmsg: no measurable gain on a clean LAN in the Android fork's tests.

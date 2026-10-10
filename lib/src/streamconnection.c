@@ -8,6 +8,7 @@
 #include <chiaki/base64.h>
 #include <chiaki/audio.h>
 #include <chiaki/video.h>
+#include <chiaki/time.h>
 
 #include <string.h>
 #include <inttypes.h>
@@ -701,6 +702,17 @@ static void stream_connection_takion_data_idle(ChiakiStreamConnection *stream_co
 			 q.target_bitrate, q.upstream_bitrate,
 			 q.upstream_loss,
 			 q.disable_upstream_audio, q.rtt, q.loss);
+		{
+			// the console only ever lowers target_bitrate when loss is reported: log it so a CBR setup can be verified
+			static uint64_t last_target_log_us = 0;
+			uint64_t now_us = chiaki_time_now_monotonic_us();
+			if(now_us - last_target_log_us >= 10000000)
+			{
+				last_target_log_us = now_us;
+				CHIAKI_LOGI(stream_connection->log, "StreamConnection console target bitrate: %d kbps (requested %u kbps)",
+						(int)q.target_bitrate, stream_connection->session->connect_info.video_profile.bitrate);
+			}
+		}
 		stream_connection->measured_bitrate = chiaki_stream_stats_bitrate(&stream_connection->video_receiver->frame_processor.stream_stats, stream_connection->session->connect_info.video_profile.max_fps) / 1000000.0;
 		CHIAKI_LOGV(stream_connection->log, "StreamConnection measured bitrate: %.4f MBit/s", stream_connection->measured_bitrate);
 		chiaki_stream_stats_reset(&stream_connection->video_receiver->frame_processor.stream_stats);
