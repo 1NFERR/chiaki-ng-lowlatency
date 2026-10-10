@@ -58,3 +58,6 @@ Setup-side (no code change):
 * **Window size = stream size** (or integer ratio): no scaling pass at all. Check the log for "Transferring hardware-decoded frames to software" - if it appears, zero-copy/hardware decoding is not in use and latency will be much worse.
 * **Network**: wired gigabit to the same switch as the PS5; disable *Interrupt Moderation* and *Energy Efficient Ethernet* in the NIC driver properties; no VPN/packet-inspection software.
 * **PS5**: use performance mode (60 fps) in games, set the console video output to 1080p, avoid HDMI-capture-heavy features (Share/background recording); game-side latency is part of the total.
+
+## Hardware decoder
+Default is now `vulkan`. With the Vulkan renderer only Vulkan-decoded frames are shown without a copy; `d3d11va` and `cuda` frames are transferred GPU -> system memory -> GPU every frame (log line "Transferring hardware-decoded frames to software"). If the GPU driver cannot decode with Vulkan, the client falls back to the other decoders automatically.

@@ -6,7 +6,7 @@
 >
 > Built and tested only through CI (it compiles and packages); **it has not been run against a console by the author**, so treat latency numbers in the notes as estimates and measure on your own setup.
 
-**Download:** see the [Releases](../../releases) page (portable Windows x64 zip: unzip and run `chiaki.exe`).
+**Download:** portable Windows x64 zip (unzip and run `chiaki.exe`), published as a **draft** release, so it is visible only to the repository owner and collaborators (see [Releases](../../releases)); the workflow artifact of the same name is also available to repository collaborators.
 
 ## What is different from upstream chiaki-ng
 
@@ -19,7 +19,7 @@
 | Bitrate | Automatic bitrate for local PS5 is **100 Mbit/s**. New option **Constant Bitrate (CBR-like)**, on by default: reports no packet loss so the console keeps the requested bitrate (turn it off on Wi-Fi). The console's `target_bitrate` is logged every 10 s. |
 | IDR | *Request IDR Frame on FEC Failure* is on by default and now retries (every 200 ms, 5 times) so the picture cannot freeze waiting for a lost IDR frame. |
 | Windows | 1 ms timer resolution, high process priority, no power throttling, MMCSS priority for the network threads, high priority render/frame threads. |
-| Defaults | PS5 codec HEVC (SDR; choose HEVC HDR for an HDR display), libplacebo preset *Default* instead of *High Quality*. |
+| Defaults | PS5 codec HEVC (SDR; choose HEVC HDR for an HDR display), libplacebo preset *Default* instead of *High Quality*, hardware decoder **Vulkan** (zero-copy with the Vulkan renderer; falls back to other decoders if the driver cannot decode with Vulkan). |
 
 Details, recommended settings (display, VRR, window size, NIC settings) and the research notes are in [`docs/setup/lowlatency.md`](docs/setup/lowlatency.md).
 

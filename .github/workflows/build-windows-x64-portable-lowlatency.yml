@@ -240,6 +240,7 @@ jobs:
         run: |
           gh release create "${{ inputs.release_tag }}" "${{ env.RELEASE_PACKAGE_PATH }}" `
             --repo "${{ github.repository }}" `
+            --draft `
             --target "${{ github.sha }}" `
             --title "chiaki-ng low-latency edition ${{ inputs.release_tag }}" `
             --notes-file docs/lowlatency-release-notes.md

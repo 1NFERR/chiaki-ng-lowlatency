@@ -11,7 +11,7 @@
 - Loss reported after FEC; **Constant Bitrate (CBR-like)** option (on by default); automatic local bitrate 100 Mbit/s
 - IDR request on FEC failure on by default, with retry
 - Windows: 1 ms timer, high priority, MMCSS for network threads
-- Defaults: HEVC (SDR), libplacebo *Default* preset
+- Defaults: HEVC (SDR), libplacebo *Default* preset, hardware decoder Vulkan (zero-copy with the Vulkan renderer)
 
 Recommended settings and full notes: [docs/setup/lowlatency.md](https://github.com/1NFERR/chiaki-ng-lowlatency/blob/claude/vigilant-bell-zi00jq/docs/setup/lowlatency.md)
 

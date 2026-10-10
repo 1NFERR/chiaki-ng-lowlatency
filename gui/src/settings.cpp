@@ -822,7 +822,9 @@ void Settings::SetAutoConnectHost(const QByteArray &mac)
 
 QString Settings::GetHardwareDecoder() const
 {
-	return settings.value("settings/hw_decoder", "auto").toString();
+	// Vulkan decode + Vulkan renderer = zero-copy; d3d11va/cuda frames would be copied through system memory.
+	// If the driver cannot decode with Vulkan the backend falls back to the other decoders by itself.
+	return settings.value("settings/hw_decoder", "vulkan").toString();
 }
 
 void Settings::SetHardwareDecoder(const QString &hw_decoder)
