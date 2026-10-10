@@ -19,6 +19,9 @@ jobs:
       dep_folder: deps
       libplacebo_tag: v7.360.1
       sdl2_compat_tag: 2.32.64
+      # CMake 4.x refuses projects/ports declaring cmake_minimum_required < 3.5 (old vcpkg baseline, third-party libs)
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+      VCPKG_ENV_PASSTHROUGH: CMAKE_POLICY_VERSION_MINIMUM
 
     defaults:
       run:
