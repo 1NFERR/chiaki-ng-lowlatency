@@ -102,6 +102,15 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ffmpeg_decoder_init(ChiakiFfmpegDecoder *de
 		CHIAKI_LOGI(log, "Using hardware decoder \"%s\" with pix_fmt=%s", hw_decoder_name, av_get_pix_fmt_name(decoder->hw_pix_fmt));
 	}
 
+	// Low latency: emit decoded frames immediately, never wait for reordering/lookahead
+	decoder->codec_context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+	if(!hw_decoder_name)
+	{
+		// Frame threading would add (threads - 1) frames of delay, slice threading doesn't
+		decoder->codec_context->thread_type = FF_THREAD_SLICE;
+		decoder->codec_context->thread_count = 0;
+	}
+
 	decoder->codec_context->framerate = decoder->synthetic_framerate;
 	decoder->codec_context->pkt_timebase = decoder->synthetic_time_base;
 	decoder->codec_context->time_base = decoder->synthetic_time_base;

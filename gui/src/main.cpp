@@ -41,6 +41,13 @@ int main(int argc, char *argv[]) { return real_main(argc, argv); }
 #include <QMap>
 #include <QSurfaceFormat>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <avrt.h>
+#include <timeapi.h>
+#include <chiaki/thread.h>
+#endif
+
 Q_DECLARE_METATYPE(ChiakiLogLevel)
 Q_DECLARE_METATYPE(ChiakiRegistEventType)
 
@@ -59,6 +66,45 @@ static const QMap<QString, CLICommand> cli_commands = {
 	{ "discover", { chiaki_cli_cmd_discover } },
 	{ "wakeup", { chiaki_cli_cmd_wakeup } }
 };
+#endif
+
+#ifdef Q_OS_WIN
+// Windows low-latency tuning: 1 ms timer resolution (default is ~15.6 ms, which makes every
+// timed wait/sleep in the network and render threads coarse), high process priority and no
+// EcoQoS/power throttling, plus MMCSS scheduling for the latency critical network threads.
+static void WinThreadBoostCb(ChiakiThreadName name, void *)
+{
+	switch(name)
+	{
+		case CHIAKI_THREAD_NAME_TAKION:
+		case CHIAKI_THREAD_NAME_TAKION_SEND:
+		case CHIAKI_THREAD_NAME_FEEDBACK:
+		case CHIAKI_THREAD_NAME_SESSION:
+		{
+			DWORD task_index = 0;
+			HANDLE mmcss = AvSetMmThreadCharacteristicsW(L"Games", &task_index);
+			if(mmcss)
+				AvSetMmThreadPriority(mmcss, AVRT_PRIORITY_HIGH);
+			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+			break;
+		}
+		default:
+			break;
+	}
+}
+
+static void WinLowLatencyInit()
+{
+	timeBeginPeriod(1);
+	SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+	PROCESS_POWER_THROTTLING_STATE throttling = {};
+	throttling.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+	throttling.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+	throttling.StateMask = 0;
+	SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &throttling, sizeof(throttling));
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+	chiaki_thread_set_affinity_cb(WinThreadBoostCb, nullptr);
+}
 #endif
 
 int RunStream(QGuiApplication &app, const StreamSessionConnectInfo &connect_info);
@@ -102,6 +148,10 @@ int real_main(int argc, char *argv[])
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 	if (qEnvironmentVariableIsSet("SteamDeck"))
 		qputenv("QT_IM_MODULE", "sdinput");
+#endif
+
+#ifdef Q_OS_WIN
+	WinLowLatencyInit();
 #endif
 
 	ChiakiErrorCode err = chiaki_lib_init();

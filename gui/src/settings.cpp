@@ -599,7 +599,7 @@ static const QMap<ChiakiCodec, QString> codecs = {
 	{ CHIAKI_CODEC_H265_HDR, "h265_hdr" }
 };
 
-static const ChiakiCodec codec_default_ps5 = CHIAKI_CODEC_H265;
+static const ChiakiCodec codec_default_ps5 = CHIAKI_CODEC_H265_HDR;
 static const ChiakiCodec codec_default_ps4 = CHIAKI_CODEC_H264;
 
 static ChiakiCodec clampCodecForBackend(RenderBackend backend, ChiakiCodec codec)
@@ -647,7 +647,8 @@ void Settings::SetCodecRemotePS5(ChiakiCodec codec)
 
 unsigned int Settings::GetAudioBufferSizeDefault() const
 {
-	return 9600;
+	// 1920 bytes = 10 ms of 48 kHz stereo S16 (one PS5 Opus frame)
+	return 1920;
 }
 
 unsigned int Settings::GetAudioBufferSizeRaw() const
@@ -1137,6 +1138,8 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS5()
 	unsigned int bitrate = GetBitrateLocalPS5();
 	if(bitrate)
 		profile.bitrate = bitrate;
+	else if(profile.width == 1920 && profile.height == 1080)
+		profile.bitrate = 30000; // LAN has bandwidth to spare, better quality at no latency cost
 	profile.codec = GetCodecLocalPS5();
 	return profile;
 }
