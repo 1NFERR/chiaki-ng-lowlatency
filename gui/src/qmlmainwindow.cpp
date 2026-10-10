@@ -5217,7 +5217,7 @@ renderer_backend_ready:
     } else {
         render_thread = new QThread;
         render_thread->setObjectName("render");
-        render_thread->start();
+        render_thread->start(QThread::TimeCriticalPriority);
         owns_render_thread = true;
 
         quick_render->prepareThread(render_thread);

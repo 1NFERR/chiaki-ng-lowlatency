@@ -47,3 +47,14 @@ The console has no client-selectable rate-control mode. What it does have (see t
 * Takion v20 (claimed audio loss protection, unverified, licence unclear) - see [vitaki#410](https://github.com/mauricio-gg/vitaki-vitarps5/issues/410).
 * Moving the decoder->render hand-off off the Qt GUI thread: saves well under 1 ms unless the GUI thread is busy, and is a large untestable refactor of `qmlmainwindow.cpp`.
 * DSCP/socket tuning/recvmmsg: no measurable gain on a clean LAN in the Android fork's tests.
+
+## Third round: remaining ideas
+Done in code: render and frame-delivery threads run at high priority; the default libplacebo preset is now *Default* instead of *High Quality* (EWA upscaling, deband and friends cost several ms of GPU time per frame; a preset you already saved is kept).
+
+Setup-side (no code change):
+* **Display scan-out**: a 60 fps stream on a 60 Hz panel is scanned top to bottom over ~16 ms; on 144/240 Hz the same frame is scanned in 7/4 ms. Set the monitor to its maximum refresh rate.
+* **Variable refresh (G-Sync/FreeSync)** with vsync off: frames are shown immediately and without tearing - the best combination with immediate present.
+* **Fullscreen/borderless covering the whole screen** (Windows "Independent Flip") avoids an extra DWM composition frame; keep the Windows HDR switch on only if you use HDR.
+* **Window size = stream size** (or integer ratio): no scaling pass at all. Check the log for "Transferring hardware-decoded frames to software" - if it appears, zero-copy/hardware decoding is not in use and latency will be much worse.
+* **Network**: wired gigabit to the same switch as the PS5; disable *Interrupt Moderation* and *Energy Efficient Ethernet* in the NIC driver properties; no VPN/packet-inspection software.
+* **PS5**: use performance mode (60 fps) in games, set the console video output to 1080p, avoid HDMI-capture-heavy features (Share/background recording); game-side latency is part of the total.
