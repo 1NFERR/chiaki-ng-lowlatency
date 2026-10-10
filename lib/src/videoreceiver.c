@@ -3,7 +3,14 @@
 #include <chiaki/videoreceiver.h>
 #include "../include/chiaki/session.h"
 
+#include <chiaki/time.h>
+
 #include <string.h>
+
+// Resend the IDR request if no IDR arrived in time (request or IDR frame lost), and
+// stop waiting after a few retries so a console that never answers can't freeze the video.
+#define IDR_RETRY_INTERVAL_US 200000
+#define IDR_MAX_RETRIES 5
 
 static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *video_receiver);
 
@@ -54,6 +61,8 @@ CHIAKI_EXPORT void chiaki_video_receiver_init(ChiakiVideoReceiver *video_receive
 	chiaki_bitstream_init(&video_receiver->bitstream, video_receiver->log, video_receiver->session->connect_info.video_profile.codec);
 	chiaki_mutex_init(&video_receiver->waiting_for_idr_mutex, false);
 	video_receiver->waiting_for_idr = false;
+	video_receiver->idr_request_time_us = 0;
+	video_receiver->idr_request_retries = 0;
 	chiaki_mutex_init(&video_receiver->frames_lost_mutex, false);
 }
 
@@ -69,8 +78,42 @@ CHIAKI_EXPORT void chiaki_video_receiver_fini(ChiakiVideoReceiver *video_receive
 CHIAKI_EXPORT void chiaki_video_receiver_set_waiting_for_idr(ChiakiVideoReceiver *video_receiver, bool waiting_for_idr)
 {
 	chiaki_mutex_lock(&video_receiver->waiting_for_idr_mutex);
+	if(waiting_for_idr)
+	{
+		// (re)arm the retry timer for every new request
+		video_receiver->idr_request_time_us = chiaki_time_now_monotonic_us();
+		if(!video_receiver->waiting_for_idr)
+			video_receiver->idr_request_retries = 0;
+	}
 	video_receiver->waiting_for_idr = waiting_for_idr;
 	chiaki_mutex_unlock(&video_receiver->waiting_for_idr_mutex);
+}
+
+static void chiaki_video_receiver_idr_watchdog(ChiakiVideoReceiver *video_receiver)
+{
+	bool resend = false;
+	chiaki_mutex_lock(&video_receiver->waiting_for_idr_mutex);
+	if(video_receiver->waiting_for_idr
+		&& chiaki_time_now_monotonic_us() - video_receiver->idr_request_time_us >= IDR_RETRY_INTERVAL_US)
+	{
+		if(video_receiver->idr_request_retries >= IDR_MAX_RETRIES)
+		{
+			video_receiver->waiting_for_idr = false;
+			CHIAKI_LOGW(video_receiver->log, "No IDR frame received after %u requests, resuming decode without it", IDR_MAX_RETRIES + 1);
+		}
+		else
+		{
+			video_receiver->idr_request_retries++;
+			video_receiver->idr_request_time_us = chiaki_time_now_monotonic_us();
+			resend = true;
+		}
+	}
+	chiaki_mutex_unlock(&video_receiver->waiting_for_idr_mutex);
+	if(resend)
+	{
+		CHIAKI_LOGW(video_receiver->log, "Still waiting for IDR frame, resending request (%u/%u)", video_receiver->idr_request_retries, IDR_MAX_RETRIES);
+		stream_connection_send_idr_request(&video_receiver->session->stream_connection);
+	}
 }
 
 CHIAKI_EXPORT bool chiaki_video_receiver_get_waiting_for_idr(ChiakiVideoReceiver *video_receiver)
@@ -149,6 +192,8 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 	{
 		if(video_receiver->packet_stats)
 			chiaki_frame_processor_report_packet_stats(&video_receiver->frame_processor, video_receiver->packet_stats);
+
+		chiaki_video_receiver_idr_watchdog(video_receiver);
 
 		// last frame not flushed yet?
 		if(video_receiver->frame_index_cur >= 0 && video_receiver->frame_index_prev != video_receiver->frame_index_cur)
