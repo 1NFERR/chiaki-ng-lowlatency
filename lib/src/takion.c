@@ -44,7 +44,7 @@
 
 #define TAKION_REORDER_QUEUE_SIZE_EXP 4 // => 16 entries
 #define TAKION_AV_VIDEO_REORDER_QUEUE_SIZE_EXP 6 // => 64 entries
-#define TAKION_AV_REORDER_TIMEOUT_US 16000 // ~1 frame at 60fps
+#define TAKION_AV_REORDER_TIMEOUT_US 4000 // wired LAN barely reorders; FEC covers the rest, so don't stall a frame for long
 #define TAKION_SEND_BUFFER_SIZE 16
 
 #define TAKION_POSTPONE_PACKETS_SIZE 32

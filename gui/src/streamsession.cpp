@@ -312,7 +312,8 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->port_guessing_enabled = settings->GetPortGuessingEnabled();
 	this->port_guess_count = settings->GetPortGuessCount();
 	this->port_guess_socket_count = settings->GetPortGuessSocketCount();
-	this->packet_loss_max = settings->GetPacketLossReportedMax();
+	// CBR-like mode: report no loss at all so the console keeps the requested bitrate
+	this->packet_loss_max = settings->GetConstantBitrate() ? 0.0 : settings->GetPacketLossReportedMax();
 	this->audio_video_disabled = settings->GetAudioVideoDisabled();
 	this->haptic_override = settings->GetHapticOverride();
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE

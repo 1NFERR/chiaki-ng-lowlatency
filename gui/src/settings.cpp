@@ -1138,8 +1138,8 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS5()
 	unsigned int bitrate = GetBitrateLocalPS5();
 	if(bitrate)
 		profile.bitrate = bitrate;
-	else if(profile.width == 1920 && profile.height == 1080)
-		profile.bitrate = 30000; // LAN has bandwidth to spare, better quality at no latency cost
+	else
+		profile.bitrate = 100000; // LAN has bandwidth to spare, better quality at no latency cost
 	profile.codec = GetCodecLocalPS5();
 	return profile;
 }

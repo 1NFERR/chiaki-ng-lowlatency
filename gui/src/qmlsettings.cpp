@@ -266,6 +266,17 @@ void QmlSettings::setIDROnFECFailureEnabled(bool enabled)
     emit iDROnFECFailureEnabledChanged();
 }
 
+bool QmlSettings::constantBitrate() const
+{
+    return settings->GetConstantBitrate();
+}
+
+void QmlSettings::setConstantBitrate(bool enabled)
+{
+    settings->SetConstantBitrate(enabled);
+    emit constantBitrateChanged();
+}
+
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 bool QmlSettings::steamDeckHaptics() const
 {
@@ -1949,6 +1960,7 @@ void QmlSettings::refreshAllKeys()
     emit keyboardEnabledChanged();
     emit dpadTouchEnabledChanged();
     emit iDROnFECFailureEnabledChanged();
+    emit constantBitrateChanged();
     emit dpadTouchIncrementChanged();
     emit dpadTouchShortcut1Changed();
     emit dpadTouchShortcut2Changed();

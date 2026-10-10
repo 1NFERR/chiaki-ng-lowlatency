@@ -1401,14 +1401,7 @@ DialogView {
                         id: bitrateLocalPS5
                         visible: selectedConsole == SettingsDialog.Console.PS5
                         property var bitrate: {
-                            var rate = 0;
-                            switch (Chiaki.settings.resolutionLocalPS5) {
-                            case 1: rate = 2; break; // 360p
-                            case 2: rate = 6; break; // 540p
-                            case 3: rate = 10; break; // 720p
-                            case 4: rate = 15; break; // 1080p
-                            }
-                            return rate;
+                            return 100; // low-latency fork: automatic local PS5 bitrate is 100 Mbps
                         }
                         Layout.preferredWidth: 200
                         from: 2
@@ -1814,6 +1807,21 @@ DialogView {
                         Label {
                             Layout.alignment: Qt.AlignRight
                             text: qsTr("(5%)")
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
+                            text: qsTr("Constant Bitrate (CBR-like, never lower bitrate)")
+                        }
+
+                        C.CheckBox {
+                            checked: Chiaki.settings.constantBitrate
+                            onToggled: Chiaki.settings.constantBitrate = !Chiaki.settings.constantBitrate
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
+                            text: qsTr("(Unchecked = adaptive/VBR)")
                         }
 
                         Label {

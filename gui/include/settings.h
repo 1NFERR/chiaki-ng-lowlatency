@@ -302,6 +302,13 @@ class Settings : public QObject
 		bool GetIDROnFECFailureEnabled() const	   { return settings.value("settings/idr_on_fec_failure", false).toBool(); }
 		void SetIDROnFECFailureEnabled(bool enabled) { settings.setValue("settings/idr_on_fec_failure", enabled); }
 
+		/**
+		 * "CBR-like" mode: never report packet loss to the console so its congestion control
+		 * keeps the requested bitrate instead of adapting it down (VBR-like behaviour).
+		 */
+		bool GetConstantBitrate() const	   { return settings.value("settings/constant_bitrate", false).toBool(); }
+		void SetConstantBitrate(bool enabled) { settings.setValue("settings/constant_bitrate", enabled); }
+
 		float GetHapticOverride() const 			{ return settings.value("settings/haptic_override", 1.0).toFloat(); }
 		void SetHapticOverride(float override)	{ settings.setValue("settings/haptic_override", override); }
 
