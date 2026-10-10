@@ -647,7 +647,8 @@ void Settings::SetCodecRemotePS5(ChiakiCodec codec)
 
 unsigned int Settings::GetAudioBufferSizeDefault() const
 {
-	return 9600;
+	// 1920 bytes = 10 ms of 48 kHz stereo S16 (one PS5 Opus frame)
+	return 1920;
 }
 
 unsigned int Settings::GetAudioBufferSizeRaw() const
@@ -686,7 +687,8 @@ static const QMap<PlaceboPreset, QString> placebo_preset_values = {
 	{ PlaceboPreset::Custom, "custom" }
 };
 
-static const PlaceboPreset placebo_preset_default = PlaceboPreset::HighQuality;
+// Default (spline36, no EWA/deband) instead of HighQuality: much less GPU time per frame, still a clean picture
+static const PlaceboPreset placebo_preset_default = PlaceboPreset::Default;
 
 PlaceboPreset Settings::GetPlaceboPreset() const
 {
@@ -820,7 +822,9 @@ void Settings::SetAutoConnectHost(const QByteArray &mac)
 
 QString Settings::GetHardwareDecoder() const
 {
-	return settings.value("settings/hw_decoder", "auto").toString();
+	// Vulkan decode + Vulkan renderer = zero-copy; d3d11va/cuda frames would be copied through system memory.
+	// If the driver cannot decode with Vulkan the backend falls back to the other decoders by itself.
+	return settings.value("settings/hw_decoder", "vulkan").toString();
 }
 
 void Settings::SetHardwareDecoder(const QString &hw_decoder)
@@ -1137,6 +1141,8 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS5()
 	unsigned int bitrate = GetBitrateLocalPS5();
 	if(bitrate)
 		profile.bitrate = bitrate;
+	else
+		profile.bitrate = 100000; // LAN has bandwidth to spare, better quality at no latency cost
 	profile.codec = GetCodecLocalPS5();
 	return profile;
 }

@@ -37,6 +37,10 @@ typedef struct chiaki_video_receiver_t
 	ChiakiBitstream bitstream;
 	ChiakiMutex waiting_for_idr_mutex;
 	bool waiting_for_idr;
+	bool frame_flush_valid; // frame_flush_result belongs to the frame currently tracked by frame_processor
+	ChiakiFrameProcessorFlushResult frame_flush_result;
+	uint64_t idr_request_time_us; // when the pending IDR request was (re)sent, valid while waiting_for_idr
+	unsigned int idr_request_retries;
 	ChiakiMutex frames_lost_mutex;
 } ChiakiVideoReceiver;
 

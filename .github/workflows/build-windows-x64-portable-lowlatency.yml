@@ -1,0 +1,246 @@
+name: Build chiaki-ng Windows x64 portable low-latency
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'If set, publish a GitHub release with this tag (for example v1.10.0-lowlatency.1)'
+        required: false
+        default: ''
+  push:
+    branches:
+      - 'claude/vigilant-bell-zi00jq'
+
+jobs:
+  build-win_x64:
+    name: Build chiaki-ng win_x64 portable (VC)
+    runs-on: windows-2022
+    env:
+      CC: clang-cl.exe
+      CXX: clang-cl.exe
+      VULKAN_SDK: C:\VulkanSDK\
+      triplet: x64-windows
+      vcpkg_baseline: 9e593bb18ea69cc5095e012465dcd675a822ed0d
+      dep_folder: deps
+      libplacebo_tag: v7.360.1
+      sdl2_compat_tag: 2.32.64
+      # CMake 4.x refuses projects/ports declaring cmake_minimum_required < 3.5 (old vcpkg baseline, third-party libs)
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+      VCPKG_ENV_PASSTHROUGH: CMAKE_POLICY_VERSION_MINIMUM
+
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Set vcpkg installed dir
+        run: |
+          echo "VCPKG_INSTALLED_DIR=${{ github.workspace }}\build\vcpkg_installed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup Vulkan
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $ver = (Invoke-WebRequest -UseBasicParsing -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
+          echo Version $ver
+          Invoke-WebRequest -UseBasicParsing -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -OutFile VulkanSDK.exe
+          echo Downloaded
+          .\VulkanSDK.exe --root ${{ env.VULKAN_SDK }}  --accept-licenses --default-answer --confirm-command install
+
+      - name: Set up Ninja
+        run: choco install ninja
+
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: 18
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.9.*"
+          host: 'windows'
+          target: 'desktop'
+          modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'
+
+      - name: Install pip dependencies
+        run: |
+          ${{ env.pythonLocation }}\python.exe -m pip install --upgrade pip
+          ${{ env.pythonLocation }}\python.exe -m pip install --upgrade setuptools wheel
+          ${{ env.pythonLocation }}\python.exe -m pip install --user --upgrade scons protobuf grpcio-tools pyinstaller
+          ${{ env.pythonLocation }}\python.exe -m pip install --user --upgrade meson
+          ${{ env.pythonLocation }}\python.exe -c 'import google.protobuf; print(google.protobuf.__file__)'
+
+      - name: Setup ffmpeg
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ".\ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
+          Expand-Archive -LiteralPath "ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -DestinationPath "."
+          Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "${{ env.dep_folder }}"
+
+      - name: Setup sdl2-compat
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -UseBasicParsing -Uri https://github.com/libsdl-org/sdl2-compat/releases/download/release-${{ env.sdl2_compat_tag }}/sdl2-compat-${{ env.sdl2_compat_tag }}-win32-x64.zip -OutFile sdl2-compat-${{ env.sdl2_compat_tag }}-win32-x64.zip
+          Expand-Archive -Force -LiteralPath "sdl2-compat-${{ env.sdl2_compat_tag }}-win32-x64.zip" -DestinationPath ".\sdl2-compat-${{ env.sdl2_compat_tag }}-win32-x64"
+          Get-ChildItem -Path ".\sdl2-compat-${{ env.sdl2_compat_tag }}-win32-x64\*" -Include "*.dll" | Copy-Item -Force -Destination "${{ env.dep_folder }}\bin"
+
+      - name: Build SPIRV-Cross
+        run: |
+          git clone https://github.com/KhronosGroup/SPIRV-Cross.git
+          cd SPIRV-Cross
+          cmake `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}\${{ env.dep_folder }}" `
+          -DSPIRV_CROSS_SHARED=ON `
+          -S . `
+          -B build `
+          -G Ninja
+          cmake --build build --config Release
+          cmake --install build
+
+      - name: Setup shaderc
+        run: |
+          # The old Google "badges" download is gone; the LunarG Vulkan SDK ships shaderc.
+          Get-ChildItem -Path "${{ env.VULKAN_SDK }}" -Recurse -Filter "shaderc*" -ErrorAction SilentlyContinue | Select-Object -First 30 -ExpandProperty FullName
+          $dep = "${{ github.workspace }}\${{ env.dep_folder }}"
+          New-Item -ItemType Directory -Force -Path "$dep\bin", "$dep\lib\pkgconfig", "$dep\include" | Out-Null
+          Copy-Item -Force "${{ env.VULKAN_SDK }}Bin\shaderc_shared.dll" "$dep\bin"
+          Copy-Item -Force "${{ env.VULKAN_SDK }}Lib\shaderc_shared.lib" "$dep\lib"
+          Copy-Item -Force -Recurse "${{ env.VULKAN_SDK }}Include\shaderc" "$dep\include"
+          $depfwd = $dep -replace '\\','/'
+          @"
+          prefix=$depfwd
+          libdir=`${prefix}/lib
+          includedir=`${prefix}/include
+
+          Name: shaderc
+          Description: shaderc (from Vulkan SDK)
+          Version: 2025.3
+          Libs: -L`${libdir} -lshaderc_shared
+          Cflags: -I`${includedir}
+          "@ -replace '(?m)^\s+','' | Set-Content -Encoding ascii "$dep\lib\pkgconfig\shaderc.pc"
+          Get-Content "$dep\lib\pkgconfig\shaderc.pc"
+
+      - name: Make build directory
+        run: |
+          mkdir build
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.vcpkg_baseline }}
+          runVcpkgInstall: true
+          vcpkgJsonGlob: "vcpkg.json"
+
+      - name: Show vcpkg failure logs
+        if: failure()
+        run: |
+          Get-ChildItem -Path vcpkg\buildtrees -Recurse -Include "config-*-out.log","build-*-out.log","*-err.log" -ErrorAction SilentlyContinue | ForEach-Object {
+            "=== $($_.FullName)"
+            Select-String -Path $_.FullName -Pattern "error|Error|ERROR|Compatibility|not able|No CMAKE" | Select-Object -First 15 | ForEach-Object { $_.Line }
+          }
+
+      - name: Build libplacebo
+        run: |
+          git clone --recursive https://github.com/haasn/libplacebo.git
+          cd libplacebo
+          git checkout --recurse-submodules ${{ env.libplacebo_tag }}
+          meson setup `
+          --prefix "${{ github.workspace }}\${{ env.dep_folder }}" `
+          --native-file ../meson.ini `
+          "--pkg-config-path=['${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\lib\pkgconfig','${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\share\pkgconfig','${{ github.workspace }}\${{ env.dep_folder }}\lib\pkgconfig']" `
+          "--cmake-prefix-path=['${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}', '${{ env.VULKAN_SDK }}', '${{ github.workspace }}\${{ env.dep_folder }}']" `
+          -Dc_args="/I ${{ env.VULKAN_SDK }}Include" `
+          -Dcpp_args="/I ${{ env.VULKAN_SDK }}Include" `
+          -Dc_link_args="/LIBPATH:${{ env.VULKAN_SDK }}Lib" `
+          -Dcpp_link_args="/LIBPATH:${{ env.VULKAN_SDK }}Lib" `
+          -Ddemos=false `
+          ./build
+          ninja -C./build
+          ninja -C./build install
+
+      - name: Apply Patches
+        run: |
+          git apply --ignore-whitespace --verbose --directory=third-party/gf-complete/ scripts/windows-vc/gf-complete.patch
+
+      - name: Configure chiaki-ng
+        run: |
+          cmake `
+          -S . `
+          -B build `
+          -G Ninja `
+          -DCMAKE_TOOLCHAIN_FILE:STRING="vcpkg/scripts/buildsystems/vcpkg.cmake" `
+          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCHIAKI_ENABLE_CLI=OFF `
+          -DCHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER=ON `
+          -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF `
+          -DPYTHON_EXECUTABLE="${{ env.pythonLocation }}\python.exe" `
+          -DCMAKE_PREFIX_PATH="${{ github.workspace }}\${{ env.dep_folder }};${{ env.VULKAN_SDK }}"
+
+      - name: Build chiaki-ng
+        run: |
+          cmake --build build --config Release --clean-first --target chiaki
+
+      - name: Prepare Qt deployment package
+        run: |
+          mkdir chiaki-ng-Win
+          cp build\gui\chiaki.exe chiaki-ng-Win
+          cp build\third-party\cpp-steam-tools\cpp-steam-tools.dll chiaki-ng-Win
+          cp scripts\qtwebengine_import.qml gui\src\qml\
+          # Copy every runtime DLL vcpkg built (its set changes with the baseline), except the SDL2 one:
+          # SDL2.dll/SDL3.dll must come from sdl2-compat.
+          $vcpkgbin = "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin"
+          Get-ChildItem $vcpkgbin -Filter *.dll | Where-Object { $_.Name -notin @('SDL2.dll','SDL3.dll') } | ForEach-Object { $_.Name } | Out-String
+          Get-ChildItem $vcpkgbin -Filter *.dll | Where-Object { $_.Name -notin @('SDL2.dll','SDL3.dll') } | Copy-Item -Destination chiaki-ng-Win -Force
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\SDL2.dll" chiaki-ng-Win -Force
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\SDL3.dll" chiaki-ng-Win -Force
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\swresample-*.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\avcodec-*.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\avutil-*.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\avformat-*.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\libplacebo-*.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\shaderc_shared.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\spirv-cross-c-shared.dll" chiaki-ng-Win
+          dumpbin /dependents chiaki-ng-Win\chiaki.exe
+          windeployqt.exe --no-translations --qmldir=gui\src\qml --release chiaki-ng-Win\chiaki.exe
+
+      - name: Package chiaki-ng
+        run: |
+          $CHIAKI_VERSION_MAJOR = (Select-String -Path .\CMakeLists.txt -Pattern 'set\(CHIAKI_VERSION_MAJOR ([0-9]+)\)') | %{$_.Matches.Groups[1].value}
+          $CHIAKI_VERSION_MINOR = (Select-String -Path .\CMakeLists.txt -Pattern 'set\(CHIAKI_VERSION_MINOR ([0-9]+)\)') | %{$_.Matches.Groups[1].value}
+          $CHIAKI_VERSION_PATCH = (Select-String -Path .\CMakeLists.txt -Pattern 'set\(CHIAKI_VERSION_PATCH ([0-9]+)\)') | %{$_.Matches.Groups[1].value}
+          $RELEASE_PACKAGE_FILE = "chiaki-ng-win_x64-VC-portable-$CHIAKI_VERSION_MAJOR.$CHIAKI_VERSION_MINOR.$CHIAKI_VERSION_PATCH-lowlatency-${{ github.sha }}.zip"
+          Compress-Archive chiaki-ng-Win $RELEASE_PACKAGE_FILE
+          $release_filepath = Get-ChildItem $RELEASE_PACKAGE_FILE | %{$_[0].FullName}
+          echo "RELEASE_PACKAGE_PATH=$release_filepath" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload chiaki-ng Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiaki-ng-win_x64-VC-Release
+          path: ${{ env.RELEASE_PACKAGE_PATH }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.release_tag }}" "${{ env.RELEASE_PACKAGE_PATH }}" `
+            --repo "${{ github.repository }}" `
+            --draft `
+            --target "${{ github.sha }}" `
+            --title "chiaki-ng low-latency edition ${{ inputs.release_tag }}" `
+            --notes-file docs/lowlatency-release-notes.md

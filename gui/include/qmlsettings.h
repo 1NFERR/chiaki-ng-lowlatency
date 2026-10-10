@@ -84,6 +84,8 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool keyboardEnabled READ keyboardEnabled WRITE setKeyboardEnabled NOTIFY keyboardEnabledChanged)
     Q_PROPERTY(bool dpadTouchEnabled READ dpadTouchEnabled WRITE setDpadTouchEnabled NOTIFY dpadTouchEnabledChanged)
     Q_PROPERTY(bool iDROnFECFailureEnabled READ iDROnFECFailureEnabled WRITE setIDROnFECFailureEnabled NOTIFY iDROnFECFailureEnabledChanged)
+    Q_PROPERTY(bool constantBitrate READ constantBitrate WRITE setConstantBitrate NOTIFY constantBitrateChanged)
+    Q_PROPERTY(bool lowLatencyPresent READ lowLatencyPresent WRITE setLowLatencyPresent NOTIFY lowLatencyPresentChanged)
     Q_PROPERTY(uint16_t dpadTouchIncrement READ dpadTouchIncrement WRITE setDpadTouchIncrement NOTIFY dpadTouchIncrementChanged)
     Q_PROPERTY(uint dpadTouchShortcut1 READ dpadTouchShortcut1 WRITE setDpadTouchShortcut1 NOTIFY dpadTouchShortcut1Changed)
     Q_PROPERTY(uint dpadTouchShortcut2 READ dpadTouchShortcut2 WRITE setDpadTouchShortcut2 NOTIFY dpadTouchShortcut2Changed)
@@ -224,6 +226,10 @@ public:
 
     bool iDROnFECFailureEnabled() const;
     void setIDROnFECFailureEnabled(bool enabled);
+    bool lowLatencyPresent() const;
+    void setLowLatencyPresent(bool enabled);
+    bool constantBitrate() const;
+    void setConstantBitrate(bool enabled);
 
     bool allowJoystickBackgroundEvents() const;
     void setAllowJoystickBackgroundEvents(bool allowJoystickBackgroundEvents);
@@ -696,6 +702,8 @@ signals:
     void controllerMappingChanged();
     void packetLossReportedMaxChanged();
     void iDROnFECFailureEnabledChanged();
+    void constantBitrateChanged();
+    void lowLatencyPresentChanged();
     void currentProfileChanged();
     void profilesChanged();
     void placeboUpscalerChanged();

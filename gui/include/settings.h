@@ -299,8 +299,21 @@ class Settings : public QObject
 		bool GetFullscreenDoubleClickEnabled() const	   { return settings.value("settings/fullscreen_doubleclick", false).toBool(); }
 		void SetFullscreenDoubleClickEnabled(bool enabled) { settings.setValue("settings/fullscreen_doubleclick", enabled); }
 
-		bool GetIDROnFECFailureEnabled() const	   { return settings.value("settings/idr_on_fec_failure", false).toBool(); }
+		bool GetIDROnFECFailureEnabled() const	   { return settings.value("settings/idr_on_fec_failure", true).toBool(); }
 		void SetIDROnFECFailureEnabled(bool enabled) { settings.setValue("settings/idr_on_fec_failure", enabled); }
+
+		/**
+		 * "CBR-like" mode: never report packet loss to the console so its congestion control
+		 * keeps the requested bitrate instead of adapting it down (VBR-like behaviour).
+		 */
+		/**
+		 * Present every decoded frame immediately instead of waiting for the next slot of the
+		 * stream-rate pacing grid (that wait delays the already stale frame by up to one frame interval).
+		 */
+		bool GetLowLatencyPresent() const	   { return settings.value("settings/low_latency_present", true).toBool(); }
+		void SetLowLatencyPresent(bool enabled) { settings.setValue("settings/low_latency_present", enabled); }
+		bool GetConstantBitrate() const	   { return settings.value("settings/constant_bitrate", true).toBool(); }
+		void SetConstantBitrate(bool enabled) { settings.setValue("settings/constant_bitrate", enabled); }
 
 		float GetHapticOverride() const 			{ return settings.value("settings/haptic_override", 1.0).toFloat(); }
 		void SetHapticOverride(float override)	{ settings.setValue("settings/haptic_override", override); }

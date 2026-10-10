@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CHIAKI_AUDIO_JITTER_PREFILL 3
+#define CHIAKI_AUDIO_JITTER_PREFILL 2
 #define CHIAKI_AUDIO_JITTER_BUFFER_SIZE 8
 
 static void chiaki_audio_receiver_frame(ChiakiAudioReceiver *audio_receiver, ChiakiSeqNum16 frame_index, bool is_haptics, uint8_t *buf, size_t buf_size);

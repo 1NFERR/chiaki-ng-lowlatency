@@ -4792,6 +4792,7 @@ void QmlMainWindow::doneOpenGLContextCurrent()
 void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
 {
     bypass_frame_queue = settings->GetDirectFrameMapping();
+    low_latency_present = settings->GetLowLatencyPresent();
     render_backend = settings->GetRenderBackend();
     setSurfaceType(render_backend == RenderBackend::Vulkan ? QWindow::VulkanSurface : QWindow::OpenGLSurface);
     qparams = {};
@@ -5216,7 +5217,7 @@ renderer_backend_ready:
     } else {
         render_thread = new QThread;
         render_thread->setObjectName("render");
-        render_thread->start();
+        render_thread->start(QThread::TimeCriticalPriority);
         owns_render_thread = true;
 
         quick_render->prepareThread(render_thread);
@@ -6985,7 +6986,9 @@ void QmlMainWindow::render()
             deferred_swap_thread &&
             deferred_present_in_flight.loadAcquire() == 0;
         if (!use_deferred_swap) {
-            if (present) {
+            // Direct frame mapping always renders the newest decoded frame, so waiting for a
+            // pacing slot here only makes the frame we are about to show older.
+            if (present && !(low_latency_present && bypass_frame_queue)) {
                 const double pace_multiplier = pending_overflow_waiting
                     ? 0.80
                     : (present_backpressure_active.loadAcquire() != 0 ? 0.90 : 1.0);
