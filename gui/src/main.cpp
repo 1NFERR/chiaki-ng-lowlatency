@@ -122,7 +122,7 @@ int real_main(int argc, char *argv[])
 	QGuiApplication::setOrganizationName("Chiaki");
 	QGuiApplication::setApplicationName("Chiaki");
 	QGuiApplication::setApplicationVersion(CHIAKI_VERSION);
-	QGuiApplication::setApplicationDisplayName("chiaki-ng");
+	QGuiApplication::setApplicationDisplayName("chiaki-ng (low-latency edition)");
 #if defined(Q_OS_MACOS)
 	qputenv("QT_MTL_NO_TRANSACTION", "1");
 #endif

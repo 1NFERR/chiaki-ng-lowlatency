@@ -2,6 +2,11 @@ name: Build chiaki-ng Windows x64 portable low-latency
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'If set, publish a GitHub release with this tag (for example v1.10.0-lowlatency.1)'
+        required: false
+        default: ''
   push:
     branches:
       - 'claude/vigilant-bell-zi00jq'
@@ -22,6 +27,9 @@ jobs:
       # CMake 4.x refuses projects/ports declaring cmake_minimum_required < 3.5 (old vcpkg baseline, third-party libs)
       CMAKE_POLICY_VERSION_MINIMUM: "3.5"
       VCPKG_ENV_PASSTHROUGH: CMAKE_POLICY_VERSION_MINIMUM
+
+    permissions:
+      contents: write
 
     defaults:
       run:
@@ -224,3 +232,14 @@ jobs:
           path: ${{ env.RELEASE_PACKAGE_PATH }}
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.release_tag }}" "${{ env.RELEASE_PACKAGE_PATH }}" `
+            --repo "${{ github.repository }}" `
+            --target "${{ github.sha }}" `
+            --title "chiaki-ng low-latency edition ${{ inputs.release_tag }}" `
+            --notes-file docs/lowlatency-release-notes.md
